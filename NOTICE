@@ -9,10 +9,18 @@ covers the port and carries the copyright notices of both projects.
 
 Unicode data
 
-The mapping and validity tables in this package are generated from Unicode
-data files, and the conformance test data is derived from Unicode's
-IdnaTestV2.txt. Those files are distributed under the Unicode License V3,
-reproduced below.
+This package contains data derived from Unicode data files:
+
+- Sources/TR46/Generated/NFCTables.swift, the normalization tables, is
+  generated from the Unicode 18.0.0 Character Database: UnicodeData.txt,
+  CompositionExclusions.txt and DerivedNormalizationProps.txt.
+- Sources/TR46/Generated/IDNATables.swift, the mapping and validity tables,
+  re-encodes tr46 7.0.0's lib/mappingTable.json and lib/regexes.js, which tr46
+  generates from Unicode 18.0.0 data files.
+- The conformance test data in Tests/TR46Tests/Resources is derived from
+  Unicode's NormalizationTest.txt, DerivedAge.txt and IdnaTestV2.txt.
+
+Those files are distributed under the Unicode License V3, reproduced below.
 
 UNICODE LICENSE V3
 
