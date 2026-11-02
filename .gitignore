@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# SwiftPM
+/.build
+/Packages
+.swiftpm/configuration/registries.json
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+.netrc
+
+# Xcode
+xcuserdata/
+DerivedData/
+
+# Editors
+.idea
+.kiro
+.vscode
