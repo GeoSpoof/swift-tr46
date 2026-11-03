@@ -8,7 +8,9 @@ import PackageDescription
 let package = Package(
     name: "TR46Benchmarks",
     dependencies: [
-        .package(path: ".."),
+        // Named, because a path dependency otherwise takes its identity from the directory name,
+        // and a clone in a directory not called swift-tr46 would then fail to resolve.
+        .package(name: "swift-tr46", path: ".."),
     ],
     targets: [
         .executableTarget(
