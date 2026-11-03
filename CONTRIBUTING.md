@@ -39,9 +39,17 @@ line.
 On Linux, or from macOS with Docker, using the same images as CI:
 
 ```sh
-docker run --rm -v "$PWD":/src:ro -w /src swift:6.0.3-noble swift test --scratch-path /tmp/.build
-docker run --rm -v "$PWD":/src:ro -w /src swift:6.4.2-noble swift test --scratch-path /tmp/.build
+for image in swift:6.0.3-noble swift:6.4.2-noble; do
+  docker run --rm -v "$PWD":/src:ro "$image" bash -c 'mkdir /tmp/src &&
+    tar -C /src --exclude=./.build --exclude=./Benchmarks/.build -cf - . | tar -C /tmp/src -xf - &&
+    cd /tmp/src && swift test'
+done
 ```
+
+The tree is copied inside the container rather than built from the mount. Files on macOS can
+carry extended attributes such as `com.apple.provenance`, which a Linux filesystem refuses, and
+SwiftPM's copy of the test resources from the mount then fails with `NSCocoaErrorDomain` error
+512. `tar` leaves the attributes behind.
 
 Apple platforms other than macOS, and the documentation:
 
