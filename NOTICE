@@ -7,12 +7,53 @@ Punycode implementation in punycode.js
 (https://github.com/mathiasbynens/punycode.js). Both are MIT licensed. LICENSE
 covers the port and carries the copyright notices of both projects.
 
+tr46 data and answers
+
+Sources/TR46/Generated/IDNATables.swift re-encodes tr46 7.0.0's
+lib/mappingTable.json, lib/regexes.js and lib/statusMapping.js, Copyright (c)
+Sebastian Mayr, under the MIT License in LICENSE. The expected answers in
+Tests/TR46Tests/Resources were produced by, or checked against, tr46 7.0.0
+and punycode.js 2.3.1. The curated and fuzzed inputs of differential.json
+were written for this package and are covered by LICENSE.
+
 Unicode data
 
-The mapping and validity tables in this package are generated from Unicode
-data files, and the conformance test data is derived from Unicode's
-IdnaTestV2.txt. Those files are distributed under the Unicode License V3,
-reproduced below.
+This package contains data derived from Unicode data files:
+
+- Sources/TR46/Generated/NFCTables.swift, the normalization tables, is
+  generated from the Unicode 18.0.0 Character Database: UnicodeData.txt,
+  CompositionExclusions.txt and DerivedNormalizationProps.txt.
+- Sources/TR46/Generated/IDNATables.swift, the mapping and validity tables,
+  re-encodes tr46 7.0.0's lib/mappingTable.json and lib/regexes.js, which tr46
+  generates from Unicode 18.0.0 data files.
+- Tests/TR46Tests/Resources/normalization-test.json and idna-test-v2.json, the
+  conformance test data, are derived from Unicode's NormalizationTest.txt,
+  IdnaTestV2.txt and DerivedAge.txt. The idnaTestV2 inputs of
+  geospoof-idna-vectors.json and the IdnaTestV2 inputs of differential.json
+  come from IdnaTestV2.txt.
+
+Those files are distributed under the Unicode License V3, reproduced at the
+end of this file.
+
+web-platform-tests data
+
+Tests/TR46Tests/Resources/wpt-toascii.json, and the WPT inputs of
+differential.json, are derived from web-platform-tests'
+url/resources/toascii.json and url/resources/IdnaTestV2.json at commit
+13748c36fdf9dd77cd0b34dd6b244256b365ea60, the commit tr46 7.0.0's tests use.
+Copyright © web-platform-tests contributors, under the 3-Clause BSD License.
+The full text, copied from that commit's LICENSE.md, is in
+Tests/TR46Tests/Resources/LICENSE-web-platform-tests.md.
+
+GeoSpoof test fixture
+
+Tests/TR46Tests/Resources/geospoof-idna-vectors.json is copied unchanged from
+the GeoSpoof iOS app repository (tests/fixtures/idna-vectors.json at commit
+5e655ee5be0a309f3c28515ecfe6587fb96cd17c). It records what the GeoSpoof
+browser extension's hostToASCII, which calls tr46 7.0.0, returned for 3,769
+inputs. It is contributed by the GeoSpoof contributors under this package's
+LICENSE, apart from its IdnaTestV2.txt inputs, which fall under the Unicode
+License V3 as above.
 
 UNICODE LICENSE V3
 

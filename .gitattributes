@@ -1,0 +1,3 @@
+# Written by Scripts/regenerate.sh, or copied verbatim from upstream: never edited by hand.
+Sources/TR46/Generated/** linguist-generated=true
+Tests/TR46Tests/Resources/*.json linguist-generated=true

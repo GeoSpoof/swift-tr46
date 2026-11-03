@@ -1,0 +1,147 @@
+name: CI
+# Builds and tests the package on the newest and the oldest supported Xcode, and on Linux with
+# Swift 6.0 and the latest Swift, and checks that the committed generated files are what the
+# generators produce.
+#
+# The job names are required status checks on main (see CONTRIBUTING.md). Renaming one, or adding
+# a path filter, would leave a pull request waiting for a check that never reports.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+# One run per ref: a new push to a pull request cancels the run it replaces. Runs on main are
+# never cancelled, so every commit there gets a complete result.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  macos-latest:
+    name: macOS (latest Xcode)
+    runs-on: macos-26
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The newest released Xcode on the image, read from each app's Info.plist rather than its
+      # name. Symlinks such as Xcode.app and Xcode_26.6.0.app are skipped, and so are betas.
+      # The case pattern keeps its leading "(": the runner's bash 3.2 otherwise reads the ")" as
+      # closing the $( ) and fails with a syntax error.
+      - name: Select the newest Xcode
+        run: |
+          set -euo pipefail
+          xcode=$(
+            for app in /Applications/Xcode*.app; do
+              [ -L "$app" ] && continue
+              case "$app" in (*beta* | *Beta*) continue ;; esac
+              printf '%s %s\n' "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" "$app"
+            done | sort -V | tail -1 | cut -d' ' -f2-
+          )
+          echo "Selected $xcode"
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+          swift --version
+      - name: Build
+        run: swift build -Xswiftc -warnings-as-errors
+      - name: Test
+        run: swift test
+      # The simulator build compiles at the toolchain's minimum deployment target, which is where
+      # an API newer than the floor would fail (see README ▸ Platforms).
+      - name: Build for the iOS Simulator
+        run: |
+          xcodebuild -quiet -scheme swift-tr46 -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" build
+      - name: Build the documentation
+        run: |
+          xcodebuild -quiet docbuild -scheme swift-tr46 -destination 'generic/platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/docc" OTHER_DOCC_FLAGS=--warnings-as-errors
+      # Built only. The benchmark has no thresholds, and a shared runner's timings mean nothing.
+      - name: Build the benchmark
+        run: swift build -c release --package-path Benchmarks
+
+  macos-xcode16:
+    name: macOS (Xcode 16)
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The oldest Xcode 16 on the image, which is the oldest toolchain the package supports:
+      # Xcode 16.0 ships Swift 6.0.
+      - name: Select the oldest Xcode 16
+        run: |
+          set -euo pipefail
+          xcode=$(
+            for app in /Applications/Xcode_16*.app; do
+              [ -L "$app" ] && continue
+              printf '%s %s\n' "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" "$app"
+            done | sort -V | head -1 | cut -d' ' -f2-
+          )
+          echo "Selected $xcode"
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+          swift --version
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+
+  linux:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux (Swift 6.0)
+            image: swift:6.0.3-noble@sha256:1a1c10372d9c6c0ba9b6151085e0a26ee83a79968b3c738a47a70eac1a70bba4
+          - name: Linux (latest Swift)
+            image: swift:6.4.2-noble@sha256:bca121f6eb59fd80340d1296887b2698ed8f3eb9eca7d80c181f8af769dc7ee0
+    # Pinned by digest, so a re-pushed tag can't change what runs. Bumped by hand: Dependabot's
+    # github-actions ecosystem doesn't watch container images (see CONTRIBUTING.md).
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: swift --version
+      - name: Build
+        run: swift build -Xswiftc -warnings-as-errors
+      - name: Test
+        run: swift test
+
+  generated:
+    name: Generated files
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The generators refuse any Node but the one in .node-version, whose Unicode and ICU
+      # versions fix the output byte for byte. No cache: there are no npm dependencies.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      # Downloads every pinned source, verifies its hash, regenerates every generated file, and
+      # fails if the result differs from what is committed.
+      - name: Regenerate and compare
+        run: Scripts/regenerate.sh --check
