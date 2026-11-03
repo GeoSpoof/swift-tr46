@@ -81,7 +81,32 @@ struct PerformanceTests {
         try Self.withinLimit("toASCII of 100,000 × U+0628 U+094D U+200C, checkJoiners") {
             let input = String(repeating: "\u{0628}\u{094D}\u{200C}", count: 100_000)
             let result = try #require(TR46.toASCII(input, options: TR46.Options(checkJoiners: true)))
-            // Each ZWNJ follows a virama, so the label is valid and encodes.
+            // Each ZWNJ follows a virama, so the label is valid and encodes. None reaches the
+            // joining-context scan in Validation.validZWNJ; the next two workloads do.
+            #expect(result.hasPrefix("xn--"))
+        }
+    }
+
+    @Test("toASCII of 100,000 × U+0628 U+200C, then U+0628, with checkJoiners", PerformanceTests.backstop)
+    func contextJJoiningContext() throws {
+        try Self.withinLimit("toASCII of 100,000 × U+0628 U+200C + U+0628, checkJoiners") {
+            let input = String(repeating: "\u{0628}\u{200C}", count: 100_000) + "\u{0628}"
+            let result = try #require(TR46.toASCII(input, options: TR46.Options(checkJoiners: true)))
+            // U+0628 is Joining_Type D, so every ZWNJ passes on its joining context, each tested on
+            // the segment up to the next ZWNJ.
+            #expect(result.hasPrefix("xn--"))
+        }
+    }
+
+    @Test("toASCII of 100,000 virama-allowed ZWNJs, then one checked on joining context", PerformanceTests.backstop)
+    func contextJManyEarlierZWNJs() throws {
+        try Self.withinLimit("toASCII of U+0628 + 100,000 × U+094D U+200C + U+0628 U+200C U+0628, checkJoiners") {
+            let input = "\u{0628}" + String(repeating: "\u{094D}\u{200C}", count: 100_000) + "\u{0628}\u{200C}\u{0628}"
+            let result = try #require(TR46.toASCII(input, options: TR46.Options(checkJoiners: true)))
+            // The virama allows the first 100,000 ZWNJs without moving the segment's start, so the
+            // last ZWNJ's segment holds all of them, and validZWNJ tries each one. Between two of
+            // them is only U+094D, Joining_Type T, so each scan has to stop at the neighbouring
+            // ZWNJ to stay linear. Only the last one has U+0628 on both sides and passes.
             #expect(result.hasPrefix("xn--"))
         }
     }
