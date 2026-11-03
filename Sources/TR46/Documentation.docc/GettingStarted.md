@@ -77,5 +77,8 @@ UTS #46 makes no judgement about confusable or mixed-script names. `p\u{0430}ypa
 Cyrillic `а`, converts to `xn--pypal-4ve.com` without error, even with every check on. For
 confusables, see [UTS #39](https://www.unicode.org/reports/tr39/).
 
-Without ``TR46/TR46/Options/verifyDNSLength`` there is no length limit. The work grows linearly, or
-as O(n log n) for Punycode, but a caller that accepts arbitrary input should cap its length first.
+Without ``TR46/TR46/Options/verifyDNSLength`` there is no length limit. With
+``TR46/TR46/Normalization/bundled`` the work grows linearly, or as O(n log n) for Punycode, but a
+caller that accepts arbitrary input should cap its length first. With `.foundation` the cap matters
+more, because Foundation's NFC is quadratic in the length of a run of combining marks; see
+<doc:NormalizationModes>.

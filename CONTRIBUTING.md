@@ -192,6 +192,10 @@ Dependabot only updates the GitHub Actions. These are bumped by hand:
   values to `run:` through `env:`.
 - Use [Conventional Commits](https://www.conventionalcommits.org/) subjects: `feat:`, `fix:`,
   `test:`, `ci:`, `docs:`, `chore:`.
+- A source-breaking change to the public API can only ship with a new tr46 major, because the
+  major and minor version follow tr46. That is why `TR46.Normalization` is a struct with static
+  properties rather than an enum: a new mode is then an addition, not a break. Keep it that way,
+  and don't add a public enum whose cases might grow.
 
 ## Documentation style
 

@@ -13,7 +13,7 @@ options, quirks included.
 
 - **Exact tr46 output.** An app that has to agree with jsdom, whatwg-url or a browser extension
   that uses tr46 needs the same answer for the same input, including where tr46
-  differs from a strict reading of UTS #46. This package is tested against tr46 itself on 9,732
+  differs from a strict reading of UTS #46. This package is tested against tr46 itself on 9,734
   inputs under all 128 `toASCII` and 64 `toUnicode` option combinations (see
   [Conformance](#conformance)).
 - **No dependencies.** The library uses only the Swift standard library, plus Foundation on Apple
@@ -120,10 +120,19 @@ change with the OS version anyway. This package therefore carries its own NFC.
   same device. GeoSpoof uses it because its Safari extension runs tr46, and tr46 calls
   JavaScriptCore's `normalize("NFC")` on the same device.
 
+`TR46.Normalization` is a struct with static properties rather than an enum, so a later release
+can add a mode without breaking your code. A `switch` over it needs a `default:` case.
+
 How far apart the two can be:
 
-- Nothing guarantees that JavaScriptCore and Foundation use the same Unicode version. On macOS
-  13–15, Safari updates ship their own WebKit and JavaScriptCore, separately from the OS.
+- `.foundation` is not the normalizer Safari's tr46 uses. JavaScriptCore's `normalize("NFC")`
+  calls ICU (`unorm2_getNFCInstance`, in WebKit's `StringPrototype.cpp`), and on macOS 27.0.1
+  JavaScriptCore links the OS's ICU, `/usr/lib/libicucore.A.dylib`. WebKit on Apple platforms
+  builds against the OS's ICU rather than bundling one, so although Safari updates on macOS 13–15
+  ship their own WebKit and JavaScriptCore, separately from the OS, they don't bring other NFC
+  data. Foundation's `precomposedStringWithCanonicalMapping` is a separate implementation with its
+  own data. So `.foundation` is a second normalizer on the same OS, and nothing guarantees that it
+  and ICU use the same Unicode version.
 - NFC is stable for assigned characters under Unicode's normalization stability policy, so two
   correct implementations can differ only on characters that one data version assigns and the other
   doesn't.
@@ -134,10 +143,16 @@ How far apart the two can be:
   NormalizationTest inputs: U+1100 U+AC00 U+11A8, the same with a second U+11A8, U+1100 U+1161
   U+11A7, and U+0CCA U+0CD5. It leaves a precomposed Hangul LV syllable before a trailing consonant
   uncomposed (even U+AC00 U+11A8 alone), drops the U+11A7, and leaves U+0CCA U+0CD5 uncomposed
-  instead of returning U+0CCB. The bundled NFC, ICU and NormalizationTest agree on the right
-  answer. So `.foundation` can differ from tr46 running on JavaScriptCore, which uses ICU, for a
-  domain holding one of these sequences. None of them occurs in the IdnaTestV2, GeoSpoof or
-  differential inputs that the `.foundation` tests run.
+  instead of returning U+0CCB. The bundled NFC, NormalizationTest, and JavaScriptCore's
+  `normalize("NFC")` on the same OS agree on the right answer. So `.foundation` can differ from
+  tr46 running on JavaScriptCore for a domain holding one of these sequences. None of them occurs
+  in the IdnaTestV2, GeoSpoof or differential inputs that the `.foundation` tests run.
+- Foundation's NFC takes time quadratic in the length of a run of combining marks, and
+  `.foundation` calls it twice per input: once for the whole domain and once for each non-ASCII
+  label. In a release build on macOS 27.0.1 (Apple M4), `toASCII` of `a` followed by alternating
+  U+0316 and U+0301 took 0.030 s at 5,000 marks, 0.116 s at 10,000, 0.476 s at 20,000 and 1.762 s
+  at 40,000, about four times as long for each doubling. With `.bundled` the same inputs took
+  0.002 s to 0.013 s. If you use `.foundation` on untrusted input, bound its length first.
 
 `.foundation` exists only on Apple platforms (`#if canImport(Darwin)`). On Linux,
 `precomposedStringWithCanonicalMapping` comes from swift-corelibs-foundation with its own tables,
@@ -159,18 +174,29 @@ and the Swift tests require all of them. Counts are from `swift test` on macOS 2
 | web-platform-tests at tr46's pin (13748c3) | toascii.json 61/61; IdnaTestV2.json 1,680/1,680 |
 | tr46's own std3ASCIIRules and url-host-parsing tests | 106 cases; 127 × 2 assertions |
 | GeoSpoof fixture (tr46 7.0.0 answers recorded by a browser extension) | 3,769/3,769 with `.bundled`, 3,769/3,769 with `.foundation` |
-| Differential against tr46 7.0.0 on Node 24.12.0 | 9,732 inputs × 128 `toASCII` combinations = 1,245,696/1,245,696; × 64 `toUnicode` combinations = 622,848/622,848 |
-| Differential with `.foundation` | 9,216 inputs × 4 combinations, 0 differences |
+| Differential against tr46 7.0.0 on Node 24.12.0 | 9,734 inputs × 128 `toASCII` combinations = 1,245,952/1,245,952; × 64 `toUnicode` combinations = 622,976/622,976 |
+| Differential with `.foundation` | 9,218 inputs × 4 combinations, 0 differences |
 | Punycode | RFC 3492 samples A–S both ways; the two code paths agree on 2,000 random inputs of up to 2,999 code points |
 
-"Strictly" means a blank status column inherits as the file documents, `hadError` is checked on
-every line, and toUnicode's domain is compared on error lines too. tr46's own harness is looser on
-all three; tr46 7.0.0 passes the strict reading.
+"Strictly" differs from tr46's own harness, `test/unicode.js`, in four ways:
+
+- A blank status column inherits as the file documents. tr46's harness reads it as no error.
+- `hadError` is checked on every line.
+- toUnicode's domain is compared on error lines too.
+- `""` is read as the empty string, as the file's header documents. tr46's harness reads it as
+  two quotation marks, so it runs line 204 on the two-character input `""` instead of the empty
+  string. The other `""` fields, on lines 499, 505 and 550, are on error lines whose values its
+  harness doesn't compare. The strict reading compares line 550's toUnicode domain, which is empty.
+
+tr46 7.0.0 passes the strict reading on all 6,396 lines.
 
 The differential inputs are every IdnaTestV2 source and every WPT input that a Swift string can
-hold (including the WPT inputs tr46's harness skips), with duplicates removed, plus 371 curated
-cases and 3,000 fuzzed ones (mulberry32, seed `0x74723436`). 121 inputs are left out because they hold a character that Unicode 18.0.0 assigns and Node 24's
-Unicode 16.0 doesn't, where the two NFCs could legitimately differ.
+hold (including the WPT inputs tr46's harness skips), with duplicates removed, plus 373 curated
+cases and 3,000 fuzzed ones (mulberry32, seed `0x74723436`). The curated cases include two
+A-labels that decode to 1,200 and 1,300 code points, so the O(n log n) Punycode decoder is
+compared with tr46 on a successful decode. 121 inputs are left out because they hold a character
+that Unicode 18.0.0 assigns and Node 24's Unicode 16.0 doesn't, where the two NFCs could
+legitimately differ.
 
 ## Differences from tr46
 
@@ -198,7 +224,8 @@ control-flow quirks.
 Foundation's `precomposedStringWithCanonicalMapping` (macOS 10.2, iOS 2.0) on Apple platforms, so
 the deployment targets are the toolchain's own minimums. With Xcode 27 those are macOS 12.0,
 iOS 15.0, tvOS 15.0, watchOS 9.0 and visionOS 1.0; SwiftPM 6.0's defaults are lower. A declared
-floor would only produce deprecation warnings on newer Xcode.
+floor would either produce a warning, if it is below the toolchain's minimum, or narrow support for
+no benefit.
 
 Linux is supported with Swift 6.0 or later.
 
@@ -212,7 +239,9 @@ Punycode's state is `Int64` for this reason).
 
 - Mapping, splitting and joining are linear, with a binary search of the mapping table per
   non-ASCII code point.
-- NFC is linear, plus O(k log k) to reorder a run of k combining marks.
+- With `.bundled`, NFC is linear, plus O(k log k) to reorder a run of k combining marks. With
+  `.foundation` it is Foundation's, which is quadratic in k; see
+  [Normalization modes](#normalization-modes) for the measurements.
 - Label validation is linear.
 - Punycode: punycode.js is O(n²) in the label length. Up to 1,024 code points this package runs the
   same algorithm line for line; above that it runs the same arithmetic in the same order with a
@@ -243,8 +272,10 @@ a 1,000,000-code-point label takes 3.3 s on the same machine.
   bidi, joiners and STD3 characters are not checked. Choose the options your protocol needs; for
   URLs, see [above](#the-whatwg-url-standards-domain-to-ascii).
 - **Bound untrusted input.** `verifyDNSLength` is off by default, and without it there is no length
-  limit. The work is linear or O(n log n) in the input, but a caller that accepts arbitrary input
-  should cap its length first.
+  limit. With `.bundled` the work is linear or O(n log n) in the input, but a caller that accepts
+  arbitrary input should cap its length first. With `.foundation` the cap matters more, because
+  Foundation's NFC is quadratic in the length of a run of combining marks: 40,000 marks took
+  1.8 s in a release build on an Apple M4.
 - **Quirks match tr46.** For example `ignoreInvalidPunycode` changes nothing, and the ContextJ check
   accepts a second ZWNJ because an earlier one in the same label was allowed. If you need a
   different reading of UTS #46, this is not the package for it.

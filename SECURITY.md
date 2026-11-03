@@ -16,7 +16,8 @@ needed, we will publish it with an advisory and credit you, unless you would rat
 
 - A crash or trap on any input, with any options. `toASCII` and `toUnicode` are meant to return a
   result for every `String`.
-- Time or memory that grows faster than O(n log n) in the input length.
+- Time or memory that grows faster than O(n log n) in the input length, with the default
+  `.bundled` normalization.
 - A result that differs from tr46 7.0.0's in a way someone could exploit, for example two
   components that are meant to agree on a hostname reaching different answers. A difference from
   tr46 that isn't listed under "Differences from tr46" in the README is a bug in any case; report
@@ -34,6 +35,11 @@ needed, we will publish it with an advisory and credit you, unless you would rat
   [Unicode](https://www.unicode.org/reporting.html), as appropriate.
 - Long inputs being slow when the caller doesn't bound them, as long as the growth is within
   O(n log n). See the README's security notes.
+- Foundation's own complexity. The `.foundation` mode hands each input to Foundation's
+  `precomposedStringWithCanonicalMapping`, whose time is quadratic in the length of a run of
+  combining marks. The README and the documentation of `TR46.Normalization.foundation` give the
+  measurements and tell callers to bound input length in that mode. Report Foundation's behaviour
+  to Apple through [Feedback Assistant](https://feedbackassistant.apple.com).
 
 ## Supported versions
 
