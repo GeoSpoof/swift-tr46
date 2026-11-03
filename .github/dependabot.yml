@@ -1,0 +1,31 @@
+version: 2
+updates:
+  # Actions only, and weekly.
+  #
+  # Stale action versions are a real failure mode rather than hygiene: GitHub has hard-failed
+  # deprecated action majors before, which breaks a workflow that hasn't been touched in months.
+  # Worth being told about. The cooldown leaves a new release a week to be pulled or fixed before
+  # it is proposed here.
+  #
+  # No swift entry: the package has no dependencies and no Package.resolved, so there would be
+  # nothing to update. Benchmarks/ depends only on this package, by path.
+  #
+  # No npm entry either: there is no package.json. The generators run on the Node in
+  # .node-version and fetch tr46 and punycode with `npm pack` at versions pinned by hash in
+  # Scripts/lib/sources.mjs. Moving to a new tr46 is a release of this package, done by hand
+  # (CONTRIBUTING.md ▸ Updating to a new tr46 or Unicode version).
+  #
+  # The Swift container digests in ci.yml and the Xcode selections are bumped by hand too, for the
+  # same reason: CONTRIBUTING.md ▸ Bumping Node, the Swift images and Xcode.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Etc/UTC
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    cooldown:
+      default-days: 7

@@ -1,0 +1,30 @@
+name: Dependency review
+# Fails a pull request that would add a dependency with a known vulnerability of high severity or
+# above. The package has no dependencies today, so this guards the day one is added, including a
+# GitHub Action.
+#
+# Pull requests only: there is no dependency graph to diff on a push. No PR comment, so the job
+# needs only contents: read.
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: dependency-review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Dependency review
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      # No checkout: the action diffs the dependency graph through the API.
+      - name: Dependency review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: never
