@@ -6,11 +6,12 @@
 /// start here, as tr46's do.
 ///
 /// Every function takes `asciiFastPath`, true outside the tests. It replaces a table lookup or NFC
-/// with an equivalent table-free branch for ASCII (D6), and each branch rests on an assertion in
-/// Scripts/generate-tables.mjs: in tr46's mapping table, A–Z are mapped to the lower-case letter
-/// and every other ASCII code point is valid, with no ASCII deviation; ASCII is NFC_QC=Yes with
-/// combining class 0; and no ASCII code point is in combiningMarks, combiningClassVirama, the
-/// validZWNJ classes or bidiDomain. FastPathTests checks both settings give the same result.
+/// with an equivalent table-free branch for ASCII (the ASCII fast path), and each branch rests on
+/// an assertion in Scripts/generate-tables.mjs: in tr46's mapping table, A–Z are mapped to the
+/// lower-case letter and every other ASCII code point is valid, with no ASCII deviation; ASCII is
+/// NFC_QC=Yes with combining class 0; and no ASCII code point is in combiningMarks,
+/// combiningClassVirama, the validZWNJ classes or bidiDomain. FastPathTests checks both settings
+/// give the same result.
 enum Processing {
     /// tr46's `mapChars(domainName, { transitionalProcessing })`: UTS #46 step 1, Map.
     static func mapChars(_ domainName: String, transitionalProcessing: Bool, asciiFastPath: Bool = true) -> [UInt32] {
@@ -20,7 +21,7 @@ enum Processing {
         for scalar in domainName.unicodeScalars {
             let ch = scalar.value
             if asciiFastPath && ch < 0x80 {
-                // D6: A–Z are mapped to a–z, and every other ASCII code point is valid.
+                // ASCII fast path: A–Z are mapped to a–z, and every other ASCII code point is valid.
                 processed.append((0x41...0x5A).contains(ch) ? ch + 0x20 : ch)
                 continue
             }
@@ -63,7 +64,7 @@ enum Processing {
             if hasACEPrefix(label) {
                 domain = Punycode.decode(Array(label.dropFirst(4))).flatMap(JSString.fromCodePoints) ?? []
             } else {
-                // D6: bidiDomain holds no ASCII.
+                // ASCII fast path: bidiDomain holds no ASCII.
                 if asciiFastPath && !JSString.containsNonASCII(label) { return false }
                 domain = label
             }
@@ -75,7 +76,7 @@ enum Processing {
     /// labels, decoded where tr46 decodes them, and tr46's error flag.
     ///
     /// The error flag is sticky, and the loop carries on after it: later labels are still decoded
-    /// but no longer validated (T1, D14). toUnicode's output needs the decoded labels; toASCII
+    /// but no longer validated (T1). toUnicode's output needs the decoded labels; toASCII
     /// returns nil whenever the flag is set, so nothing after the first error changes its result.
     static func process(_ domainName: String, options: TR46.Options, asciiFastPath: Bool = true) -> (labels: [[UInt32]], error: Bool) {
         let normalizer = Normalizer(mode: options.normalization)
@@ -84,7 +85,7 @@ enum Processing {
         var string = mapChars(domainName, transitionalProcessing: options.transitionalProcessing, asciiFastPath: asciiFastPath)
 
         // 2. Normalize.
-        // D6: an all-ASCII string is already in NFC.
+        // ASCII fast path: an all-ASCII string is already in NFC.
         if !(asciiFastPath && !JSString.containsNonASCII(string)) {
             string = normalizer.nfc(string)
         }

@@ -215,7 +215,7 @@ struct PunycodeTests {
                 #expect(raw.flatMap(JSString.fromCodePoints) == row.codePoints, "\(row.digits), \(strategy)")
             }
         }
-        // The same rows through toASCII (plan.md §6, J1 and J2).
+        // The same rows through toASCII (J1 and J2 in BehaviourFromJavaScript.md).
         let domains: [(String, String?)] = [
             ("xn--8c9bk9h.com", "xn--e28h.com"),
             ("xn--8c9b.com", nil),

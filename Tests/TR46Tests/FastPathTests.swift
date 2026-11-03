@@ -2,7 +2,7 @@ import Testing
 
 @testable import TR46
 
-/// The ASCII fast path (plan.md D6) against the table path: `Processing.process` with
+/// The ASCII fast path against the table path: `Processing.process` with
 /// `asciiFastPath` true and false must give the same labels and error, for every all-ASCII input
 /// in the vector files and 2,000 drawn ASCII strings, under all 128 option combinations.
 @Suite("ASCII fast path")

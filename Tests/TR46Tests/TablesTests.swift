@@ -25,7 +25,7 @@ struct TablesTests {
         ("bidiS6Trailing", IDNATables.bidiS6Trailing),
     ]
 
-    /// The classes an all-ASCII label or domain never consults (D6).
+    /// The classes an all-ASCII label or domain never consults, under the ASCII fast path.
     static let fastPathClasses: [(name: String, ranges: [UInt32])] = [
         ("combiningMarks", IDNATables.combiningMarks),
         ("combiningClassVirama", IDNATables.combiningClassVirama),
@@ -94,7 +94,7 @@ struct TablesTests {
         #expect(surrogates.isEmpty, "surrogates not disallowed: \(surrogates.prefix(5))")
     }
 
-    @Test("ASCII: A–Z map to lower case, every other code point is valid (D6)")
+    @Test("ASCII: A–Z map to lower case, every other code point is valid, as the ASCII fast path assumes")
     func asciiRows() {
         for codePoint in UInt32(0)...0x7F {
             let (status, mapping) = Lookup.status(of: codePoint)
@@ -106,7 +106,7 @@ struct TablesTests {
         }
     }
 
-    @Test("no ASCII code point is in a class the ASCII fast path skips (D6)")
+    @Test("no ASCII code point is in a class the ASCII fast path skips")
     func noASCIIInFastPathClasses() {
         for (name, ranges) in Self.fastPathClasses {
             let ascii = (UInt32(0)...0x7F).filter { Lookup.contains(ranges, $0) }

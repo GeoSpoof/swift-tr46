@@ -1,4 +1,5 @@
-// Throughput of the public API on the workloads of plan.md §12, timed with ContinuousClock:
+// Throughput of the public API on ASCII and IDN hostnames and on one long label, timed with
+// ContinuousClock:
 //
 //   swift run -c release --package-path Benchmarks TR46Benchmark
 //

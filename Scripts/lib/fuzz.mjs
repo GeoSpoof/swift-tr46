@@ -1,7 +1,7 @@
 /**
  * fuzz.mjs
  *
- * The seeded PRNG and the generator of fuzz inputs for differential.json (plan.md §11.4). The
+ * The seeded PRNG and the generator of fuzz inputs for differential.json. The
  * same seed gives the same sequence on every run, so the file is reproducible byte for byte.
  *
  * An input is 1–4 labels (weighted 40/30/20/10) joined by "." 85% of the time, otherwise by one of
@@ -20,7 +20,8 @@
  *
  * Every pool comes from tr46's own mapping table and regex classes or from the Unicode 18.0.0
  * UCD, and holds no surrogate and nothing that is newer than Node (assigned in Unicode 18.0.0 but
- * \p{Cn} under Node's Unicode 16.0), so no fuzz input is lost to the D8 exclusion through a pool.
+ * \p{Cn} under Node's Unicode 16.0), so no fuzz input is lost to the newer-than-Node exclusion
+ * in generate-vectors.mjs through a pool.
  */
 import { fail } from "./sources.mjs";
 
@@ -76,7 +77,7 @@ function expand(ranges) {
 }
 
 /**
- * The pools of plan.md §11.4, each with its share of a pool label's code points. A pool with
+ * The pools a pool label draws from, each with its share of the label's code points. A pool with
  * several parts draws a part uniformly first, so a small part (U+1E9E, the Hangul jamo) isn't
  * drowned by a large one.
  *

@@ -32,8 +32,8 @@ enum Validation {
             return false
         }
 
-        // D6: an all-ASCII label is already in NFC, can't begin with a combining mark, holds no
-        // joiner, and has the statuses checked below without the table.
+        // ASCII fast path: an all-ASCII label is already in NFC, can't begin with a combining
+        // mark, holds no joiner, and has the statuses checked below without the table.
         let isASCII = asciiFastPath && !JSString.containsNonASCII(label)
 
         // "1. The label must be in Unicode Normalization Form NFC."
@@ -77,7 +77,7 @@ enum Validation {
         for codePoint in label {
             let status: Status
             if isASCII {
-                // D6: tr46's ASCII rows are A–Z mapped and everything else valid.
+                // ASCII fast path: tr46's ASCII rows are A–Z mapped and everything else valid.
                 status = (0x41...0x5A).contains(codePoint) ? .mapped : .valid
             } else {
                 status = Lookup.status(of: codePoint).0

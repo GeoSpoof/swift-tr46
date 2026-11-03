@@ -2,9 +2,10 @@ import Testing
 
 @testable import TR46
 
-/// `Resources/differential.json`: real tr46 7.0.0's answers under pinned Node, for every input of
-/// plan.md §11.1 under all 128 toASCII and all 64 toUnicode option combinations (D8). Every answer
-/// must be reproduced byte for byte, and toUnicode's error flag with it.
+/// `Resources/differential.json`: real tr46 7.0.0's answers under pinned Node, for the IdnaTestV2
+/// sources, the WPT inputs, the curated inputs and the fuzz inputs, under all 128 toASCII and all 64
+/// toUnicode option combinations. Every answer must be reproduced byte for byte, and toUnicode's
+/// error flag with it.
 @Suite("Differential: real tr46 7.0.0 under every option combination")
 struct DifferentialTests {
     // MARK: - differential.json
@@ -138,8 +139,8 @@ struct DifferentialTests {
         return owners.count == combinations ? owners : nil
     }
 
-    /// toUnicode's combination `k` of 64, in the file's toUnicode order: D17's order without
-    /// verifyDNSLength, which toUnicode ignores and is passed separately.
+    /// toUnicode's combination `k` of 64, in the file's toUnicode order: `TR46.Options`'s order
+    /// without verifyDNSLength, which toUnicode ignores and is passed separately.
     static func toUnicodeOptions(
         _ k: Int,
         verifyDNSLength: Bool = false,

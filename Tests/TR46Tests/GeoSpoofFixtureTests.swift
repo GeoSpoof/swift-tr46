@@ -46,8 +46,11 @@ struct GeoSpoofFixtureTests {
     }
 
     #if canImport(Darwin)
-    /// The fixture already leaves out every input, and every toUnicode result, holding a code
-    /// point that Node's Unicode 16.0 data doesn't assign, so it needs no age filter here.
+    /// The fixture has no `age` field, and runs whole here. 65 of its vectors hold a character newer
+    /// than Unicode 14.0 in the input, the answer, a mapped form or a decoded label, but none of
+    /// those characters has a nonzero combining class, a canonical decomposition, or a part in one
+    /// (checked against the Unicode 18.0.0 UCD in November 2026). So NFC treats each the same
+    /// whether or not the OS's Unicode data assigns it, and an older OS gives the same answer.
     @Test("every vector, with Foundation's NFC")
     func foundation() throws {
         let result = try Self.run(.foundation)

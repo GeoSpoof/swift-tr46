@@ -1,5 +1,6 @@
 // The parts of JavaScript's UTF-16 string semantics that tr46 7.0.0 and punycode.js 2.3.1 depend
-// on, over code points. See plan.md §6, J1–J12, for each behaviour and why it matters.
+// on, over code points. Documentation.docc/BehaviourFromJavaScript.md describes each of J1–J12,
+// the labels used below, and why it matters.
 // tr46 7.0.0 index.js, Copyright (c) Sebastian Mayr. MIT; see LICENSE.
 // index.js SHA-256 dd2eae4174a287b5a081feba8c41dd85d713d8b5185b5e98313c7ffe83834646
 

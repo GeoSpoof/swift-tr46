@@ -1,4 +1,4 @@
-/// The IDNA vector files in `Resources/`, as `Scripts/generate-vectors.mjs` writes them (plan.md §9),
+/// The IDNA vector files in `Resources/`, as `Scripts/generate-vectors.mjs` writes them,
 /// and the GeoSpoof fixture, which is copied as it is.
 enum IDNAVectors {
     // MARK: idna-test-v2.json

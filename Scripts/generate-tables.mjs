@@ -54,7 +54,7 @@ function idnaTables(sources) {
     fail(`U+1E9E is ${capitalSharpS.status} → ${JSON.stringify(capitalSharpS.mapping)}, expected mapped to U+00DF`);
   }
 
-  // D6: the ASCII branch of mapChars lower-cases A–Z and keeps everything else.
+  // ASCII fast path: the ASCII branch of mapChars lower-cases A–Z and keeps everything else.
   for (let cp = 0; cp <= 0x7f; cp++) {
     const row = rowAt(rows, cp);
     if (cp >= 0x41 && cp <= 0x5a) {
@@ -103,7 +103,7 @@ function idnaTables(sources) {
   const classes = readClasses(tr46);
   const ranges = Object.fromEntries(classes.map((t) => [t.swiftName, t.ranges]));
   const zwnjClasses = ["validZWNJBefore", "validZWNJTransparentBefore", "validZWNJTransparentAfter", "validZWNJAfter"];
-  // D6: an all-ASCII label skips the combining-mark and ContextJ steps, and an all-ASCII domain
+  // ASCII fast path: an all-ASCII label skips the combining-mark and ContextJ steps, and an all-ASCII domain
   // is never a Bidi domain name, so none of these classes may hold an ASCII code point.
   for (const name of ["combiningMarks", "combiningClassVirama", ...zwnjClasses, "bidiDomain"]) {
     if (ranges[name].length > 0 && ranges[name][0][0] <= 0x7f) fail(`${name} contains ASCII ${U(ranges[name][0][0])}`);
@@ -297,7 +297,7 @@ async function nfcTables(sources) {
     for (let cp = lo; cp <= hi; cp++) if (inRanges(qcMaybe, cp)) fail(`${U(cp)} is both NFC_QC=N and NFC_QC=M`);
   }
 
-  // ── D6: an all-ASCII string is already NFC
+  // ── ASCII fast path: an all-ASCII string is already NFC
   for (let cp = 0; cp <= 0x7f; cp++) {
     if (cccOf(cp) !== 0) fail(`${U(cp)} has combining class ${cccOf(cp)}`);
     if (entries.some((e) => e.first === cp && e.decomposition)) fail(`${U(cp)} has a decomposition`);

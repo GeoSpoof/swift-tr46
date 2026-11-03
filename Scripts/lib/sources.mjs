@@ -36,7 +36,7 @@ export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 
 // ── Pins ───────────────────────────────────────────────────────────────────────
 
-/** D15: the generators run on exactly this Node, so their output is byte-reproducible. */
+/** The generators run on exactly this Node, so their output is byte-reproducible. Keep it equal to .node-version. */
 export const NODE = { version: "v24.12.0", unicode: "16.0", icu: "77.1" };
 
 export const TR46 = {
@@ -152,7 +152,7 @@ export function fail(message) {
   throw new GeneratorError(message);
 }
 
-/** D15. Any other Node could normalize, iterate or format differently, so it is refused. */
+/** Refuses any Node but `NODE`: another could normalize, iterate or format differently. */
 export function checkNode() {
   const actual = { version: process.version, unicode: process.versions.unicode, icu: process.versions.icu };
   if (actual.version !== NODE.version || actual.unicode !== NODE.unicode || actual.icu !== NODE.icu) {

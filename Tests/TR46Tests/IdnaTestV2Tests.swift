@@ -3,7 +3,7 @@ import Testing
 @testable import TR46
 
 /// Unicode 18.0.0's IdnaTestV2.txt, as `Resources/idna-test-v2.json` resolves it, under the options
-/// of tr46's test/unicode.js at v7.0.0, read strictly (plan.md D7): inherited statuses, toASCII
+/// of tr46's test/unicode.js at v7.0.0, read strictly: inherited statuses, toASCII
 /// compared exactly, and toUnicode's domain and error compared on every row. Real tr46 7.0.0 passes
 /// every row this way, and the generator asserts it.
 @Suite("Conformance: Unicode 18.0.0 IdnaTestV2")

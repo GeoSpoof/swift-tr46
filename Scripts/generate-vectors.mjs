@@ -151,7 +151,7 @@ const IDNA_TEST_OPTIONS = {
 };
 
 /**
- * IdnaTestV2.txt, each row resolved strictly by the file's own rules (plan.md D7), and every
+ * IdnaTestV2.txt, each row resolved strictly by the file's own rules, and every
  * answer checked against real tr46. Stricter than tr46's harness in three ways: a blank status
  * inherits as the file documents (the harness reads it as no error), toASCII must give exactly the
  * expected value (the harness accepts a null), and toUnicode's domain and error are compared on
@@ -406,7 +406,7 @@ function checkSeedFixture({ tr46 }) {
 
 // ── differential.json ──────────────────────────────────────────────────────────
 
-/** Bit j of a combination number is option j of these (plan.md §11.3, D17's order). */
+/** Bit j of a combination number is option j of these, in the order `TR46.Options` declares them. */
 const OPTION_ORDER = {
   toASCII: ["checkHyphens", "checkBidi", "checkJoiners", "useSTD3ASCIIRules", "transitionalProcessing", "verifyDNSLength", "ignoreInvalidPunycode"],
   // tr46's toUnicode has no verifyDNSLength.
@@ -424,7 +424,7 @@ const hexMask = (mask, combinationCount) => mask.toString(16).padStart(combinati
 const CURATED_MAX_CODE_POINTS = 2004;
 
 /**
- * The curated inputs of plan.md §11.2, grouped by what they exercise. The groups overlap on
+ * The curated inputs, grouped by what they exercise. The groups overlap on
  * purpose; the inputs are deduplicated afterwards. `seedCurated` is the GeoSpoof fixture's
  * curated inputs, and `punycode` is punycode.js, for the A-label of non-NFC text.
  */
@@ -436,7 +436,8 @@ function curatedGroups(seedCurated, punycode) {
   const cjk = String.fromCodePoint(...Array.from({ length: 1000 }, (_, i) => 0x4e00 + i));
   return [
     ["the GeoSpoof fixture's curated inputs", seedCurated],
-    // plan.md §6, with its exact strings.
+    // The J and T items of Sources/TR46/Documentation.docc/BehaviourFromJavaScript.md, with its
+    // exact strings.
     ["J1: decoded values re-pair", ["xn--8c9bk9h.com", "xn--8c9b.com", "xn--8c9bj9h.com", "xn--a-8f4gp1m.com"]],
     ["J2: a decoded value above 10FFFF", ["xn--en32g.com"]],
     ["J3: a lone surrogate in toUnicode's output", ["xn--8c9b.com"]],
@@ -448,7 +449,7 @@ function curatedGroups(seedCurated, punycode) {
     ["T7: ContextJ's earlier ZWNJ", ["\u0628\u094D\u200C\u0628\u200Ca", "\u0628\u200Ca"]],
     ["T8: encode overflow", [`${a(10950)}\u{30000}`, `${a(10900)}\u{30000}`]],
     ["T9: verifyDNSLength", [a(63), a(64), total253, total254, `${total253}.`, "", "example.com."]],
-    // The rest of plan.md §11.2.
+    // Edge cases by category.
     ["decode overflow", ["xn--99999999999a", "xn--zzzzzzzzzzzz", `xn--${"9".repeat(2000)}`]],
     ["DNS length edges", [a(63), a(64), total253, total254, `${total253}.`, `${total254}.`, ".", "..", "a..b"]],
     ["STD3: every ASCII character, alone and inside a?b", [...ascii, ...ascii.map((ch) => `a${ch}b`), "_dmarc.example.com"]],
@@ -516,7 +517,8 @@ function curatedGroups(seedCurated, punycode) {
 
 /**
  * Unicode's 66 noncharacters are listed in DerivedAge but are gc=Cn in every version, so they
- * are not "assigned" in the sense D8 means, and both NFCs treat them as they treat any Cn.
+ * are not "assigned" in the sense the newer-than-Node rule below means, and both NFCs treat them
+ * as they treat any Cn.
  */
 const NONCHARACTER = /^\p{Noncharacter_Code_Point}$/u;
 const UNASSIGNED_IN_NODE = /^\p{Cn}$/u;
@@ -524,7 +526,8 @@ const UNASSIGNED_IN_NODE = /^\p{Cn}$/u;
 /**
  * Code points assigned in Unicode 18.0.0 (DerivedAge, less the noncharacters) that are \p{Cn}
  * under this Node, whose ICU has only Unicode 16.0. Node's normalize("NFC") could treat them
- * differently from the bundled Unicode 18.0.0 NFC, so an input that meets one is left out (D8).
+ * differently from the bundled Unicode 18.0.0 NFC, so an input that meets one is left out: the
+ * newer-than-Node rule.
  * Code points unassigned in both are kept: both versions treat them identically.
  */
 function newerThanNodeLookup(ageRanges) {
@@ -540,8 +543,9 @@ function newerThanNodeLookup(ageRanges) {
 }
 
 /**
- * Every input of plan.md §11.1, in order and deduplicated, with real tr46's answers under all 128
- * toASCII and 64 toUnicode option combinations (D8). Each answer is grouped with the combinations
+ * Every differential input (the IdnaTestV2 sources, the WPT inputs, the curated inputs and the
+ * fuzz inputs), in order and deduplicated, with real tr46's answers under all 128 toASCII and 64
+ * toUnicode option combinations. Each answer is grouped with the combinations
  * that give it, as a hex bitmask; the masks of one input partition the combinations.
  */
 async function differentialVectors(sources, oracle, ageOf, ageRanges, seedFixture) {
@@ -572,7 +576,7 @@ async function differentialVectors(sources, oracle, ageOf, ageRanges, seedFixtur
     if (union !== all) fail(`${where}: the answers don't cover every combination`);
   };
 
-  /** The vector for `input`, or null when D8 leaves it out. */
+  /** The vector for `input`, or null when the newer-than-Node rule leaves it out. */
   const vectorFor = (input, where) => {
     if (LONE_SURROGATE.test(input)) fail(`${where} ${show(input)}: a lone surrogate in an input`);
     const ascii = toASCIICombinations.map((options) => tr46.toASCII(input, options));
@@ -618,7 +622,8 @@ async function differentialVectors(sources, oracle, ageOf, ageRanges, seedFixtur
   const counts = { inputs: 0, idnaTestV2: 0, wpt: 0, curated: 0, fuzz: 0, excludedNewerThanNode: 0, toASCIIResults: 0, toUnicodeResults: 0 };
   const excluded = { idnaTestV2: 0, wpt: 0, curated: 0, fuzz: 0 };
   const duplicates = { idnaTestV2: 0, wpt: 0, curated: 0, fuzz: 0 };
-  /** Adds `input` from `kind` unless it is a duplicate or D8 leaves it out; returns whether it did. */
+  /** Adds `input` from `kind` unless it is a duplicate or the newer-than-Node rule leaves it out;
+   * returns whether it did. */
   const add = (kind, input, where) => {
     if (seen.has(input)) {
       duplicates[kind]++;
@@ -674,8 +679,8 @@ async function differentialVectors(sources, oracle, ageOf, ageRanges, seedFixtur
     }
   }
 
-  // 4. Exactly FUZZ_COUNT fuzz inputs. A draw that repeats an earlier input, or that D8 leaves
-  // out, is replaced by the next one.
+  // 4. Exactly FUZZ_COUNT fuzz inputs. A draw that repeats an earlier input, or that the
+  // newer-than-Node rule leaves out, is replaced by the next one.
   const pkg = oracle.pkg;
   const unicodeData = parseUnicodeData((await sources.unicode("UnicodeData")).text);
   const pools = createPools({ rows: oracle.rows, status: oracle.status, classes: readClasses(pkg), unicodeData, newerThanNode: newer.has });

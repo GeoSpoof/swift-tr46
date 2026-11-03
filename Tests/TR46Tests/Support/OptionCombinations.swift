@@ -1,8 +1,8 @@
 import TR46
 
 /// Every combination of `TR46.Options`'s seven Booleans, numbered so that bit j of combination k
-/// is option j in plan.md D17's order: checkHyphens, checkBidi, checkJoiners, useSTD3ASCIIRules,
-/// transitionalProcessing, verifyDNSLength, ignoreInvalidPunycode.
+/// is option j in the order `TR46.Options` declares them: checkHyphens, checkBidi, checkJoiners,
+/// useSTD3ASCIIRules, transitionalProcessing, verifyDNSLength, ignoreInvalidPunycode.
 enum OptionCombinations {
     static let names = [
         "checkHyphens", "checkBidi", "checkJoiners", "useSTD3ASCIIRules",

@@ -3,7 +3,7 @@ import Testing
 @testable import TR46
 
 /// The public API: its defaults and versions, tr46's own small test files, and the named
-/// behaviours of plan.md §6 that come from tr46 and JavaScript.
+/// behaviours from tr46 and JavaScript that Documentation.docc/BehaviourFromJavaScript.md lists.
 @Suite("API: TR46.toASCII and TR46.toUnicode")
 struct APITests {
     private static func expectASCII(
@@ -143,7 +143,7 @@ struct APITests {
         }
     }
 
-    // MARK: - Behaviour from JavaScript and tr46 (plan.md §6)
+    // MARK: - Behaviour from JavaScript and tr46 (BehaviourFromJavaScript.md)
 
     @Test("J3: a decoded lone surrogate comes back as U+FFFD, with an error")
     func loneSurrogateBecomesReplacementCharacter() {
