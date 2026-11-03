@@ -89,6 +89,37 @@ export function rowAt(rows, cp) {
   return rows[lo];
 }
 
+/**
+ * tr46's mapChars(domainName, { transitionalProcessing }) over the rows readMappingTable returns,
+ * re-implemented because index.js doesn't export it. Used only to tag a vector with the age of
+ * the code points it passes through, never to produce an expected answer.
+ */
+export function mapChars(rows, status, domainName, transitionalProcessing) {
+  let processed = "";
+  for (const ch of domainName) {
+    const row = rowAt(rows, ch.codePointAt(0));
+    switch (row.status) {
+      case status.disallowed:
+        processed += ch;
+        break;
+      case status.ignored:
+        break;
+      case status.mapped:
+        processed += transitionalProcessing && ch === "\u1E9E" ? "ss" : row.mapping;
+        break;
+      case status.deviation:
+        processed += transitionalProcessing ? row.mapping : ch;
+        break;
+      case status.valid:
+        processed += ch;
+        break;
+      default:
+        fail(`mapChars: status ${row.status} at U+${ch.codePointAt(0).toString(16).toUpperCase()}`);
+    }
+  }
+  return processed;
+}
+
 /** Adjacent rows merge only when status and mapping are equal, so every code point keeps its pair. */
 export function mergeRuns(rows) {
   const runs = [];
