@@ -34,7 +34,9 @@ swift test --skip-build --no-parallel --filter PerformanceTests   # for meaningf
 The suites are `TablesTests`, `NormalizationTests`, `PunycodeTests`, `APITests`,
 `IdnaTestV2Tests`, `WPTTests`, `GeoSpoofFixtureTests`, `FastPathTests`, `DifferentialTests` and
 `PerformanceTests`. Each conformance suite prints one `[conformance]` or `[differential]` summary
-line.
+line. Each performance test prints a `[performance]` line with the time its work took, which must
+stay under a minute; that is timed from when the work starts, so it holds in a parallel run on a
+machine with few cores, where a test can wait a long time for a thread.
 
 On Linux, or from macOS with Docker, using the same images as CI:
 
