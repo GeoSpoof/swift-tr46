@@ -20,14 +20,16 @@ This package contains data derived from Unicode data files:
 - Tests/TR46Tests/Resources/normalization-test.json and idna-test-v2.json, the
   conformance test data, are derived from Unicode's NormalizationTest.txt,
   IdnaTestV2.txt and DerivedAge.txt. The idnaTestV2 inputs of
-  geospoof-idna-vectors.json come from IdnaTestV2.txt.
+  geospoof-idna-vectors.json and the IdnaTestV2 inputs of differential.json
+  come from IdnaTestV2.txt.
 
 Those files are distributed under the Unicode License V3, reproduced at the
 end of this file.
 
 web-platform-tests data
 
-Tests/TR46Tests/Resources/wpt-toascii.json is derived from web-platform-tests'
+Tests/TR46Tests/Resources/wpt-toascii.json, and the WPT inputs of
+differential.json, are derived from web-platform-tests'
 url/resources/toascii.json and url/resources/IdnaTestV2.json at commit
 13748c36fdf9dd77cd0b34dd6b244256b365ea60, the commit tr46 7.0.0's tests use.
 Copyright © web-platform-tests contributors, under the 3-Clause BSD License.

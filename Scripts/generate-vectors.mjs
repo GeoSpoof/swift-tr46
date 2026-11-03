@@ -6,9 +6,10 @@
  *   idnaTestV2Vectors()      idna-test-v2.json         Unicode 18.0.0's IdnaTestV2.txt, resolved strictly
  *   wptVectors()             wpt-toascii.json          WPT toascii.json and IdnaTestV2.json at tr46's pin
  *   checkSeedFixture()       (writes nothing)          geospoof-idna-vectors.json, copied verbatim, is checked
+ *   differentialVectors()    differential.json         real tr46's answers under all 128 + 64 option combinations
  *
  * Every expected IDNA answer is checked against real tr46 7.0.0 from the verified tarball, and the
- * run fails on the first one tr46 doesn't give.
+ * run fails on the first one tr46 doesn't give. differential.json's answers are tr46's own.
  *
  *   Scripts/regenerate.sh           # both generators (preferred)
  *   node Scripts/generate-vectors.mjs [--unicode-dir d] [--data-dir d] [--tr46-tarball p] [--punycode-tarball p]
@@ -20,7 +21,7 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { ROOT, SEED_FIXTURE, Sources, TR46, UNICODE, WPT, fail, parseArgs, run, sha256 } from "./lib/sources.mjs";
+import { NODE, PUNYCODE, ROOT, SEED_FIXTURE, Sources, TR46, UNICODE, WPT, fail, parseArgs, run, sha256 } from "./lib/sources.mjs";
 import {
   ageLookup,
   ageRank,
@@ -28,8 +29,10 @@ import {
   parseIdnaStatus,
   parseIdnaTestV2,
   parseNormalizationTest,
+  parseUnicodeData,
 } from "./lib/ucd.mjs";
-import { mapChars, readMappingTable, readStatusMapping } from "./lib/tr46-data.mjs";
+import { mapChars, readClasses, readMappingTable, readStatusMapping } from "./lib/tr46-data.mjs";
+import { FUZZ_COUNT, FUZZ_SEED, createFuzzer, createPools, createRandom } from "./lib/fuzz.mjs";
 import { vectorFile, writeOutput } from "./lib/emit.mjs";
 
 const TAG = "generate-vectors";
@@ -130,6 +133,11 @@ function loadTr46(sources) {
   const rows = readMappingTable(pkg, status);
   return {
     tr46,
+    // The punycode.js 2.3.1 module tr46 itself loads (sources.mjs checks the resolution).
+    punycode: pkg.require("punycode/"),
+    pkg,
+    rows,
+    status,
     mapChars: (text, transitionalProcessing) => mapChars(rows, status, text, transitionalProcessing),
   };
 }
@@ -393,6 +401,342 @@ function checkSeedFixture({ tr46 }) {
   }
   const total = Object.values(SEED_FIXTURE.counts).reduce((a, b) => a + b, 0);
   console.log(`[${TAG}] checked ${SEED_COPY}: SHA-256 ${actual}, ${SEED_FIXTURE.counts.curated} curated + ${SEED_FIXTURE.counts.idnaTestV2} IdnaTestV2 = ${total} vectors, all tr46's answers`);
+  return fixture;
+}
+
+// ── differential.json ──────────────────────────────────────────────────────────
+
+/** Bit j of a combination number is option j of these (plan.md §11.3, D17's order). */
+const OPTION_ORDER = {
+  toASCII: ["checkHyphens", "checkBidi", "checkJoiners", "useSTD3ASCIIRules", "transitionalProcessing", "verifyDNSLength", "ignoreInvalidPunycode"],
+  // tr46's toUnicode has no verifyDNSLength.
+  toUnicode: ["checkHyphens", "checkBidi", "checkJoiners", "useSTD3ASCIIRules", "transitionalProcessing", "ignoreInvalidPunycode"],
+};
+
+/** Every combination of `order`, as tr46 options objects, combination k at index k. */
+const combinations = (order) =>
+  Array.from({ length: 2 ** order.length }, (_, k) => Object.fromEntries(order.map((name, j) => [name, (k & (2 ** j)) !== 0])));
+
+/** A combination bitmask as fixed-width lower-case hex, bit k set for combination k. */
+const hexMask = (mask, combinationCount) => mask.toString(16).padStart(combinationCount / 4, "0");
+
+/** The longest curated input apart from T8's: 2,000 code points, plus the "xn--" of the decode-overflow case. */
+const CURATED_MAX_CODE_POINTS = 2004;
+
+/**
+ * The curated inputs of plan.md §11.2, grouped by what they exercise. The groups overlap on
+ * purpose; the inputs are deduplicated afterwards. `seedCurated` is the GeoSpoof fixture's
+ * curated inputs, and `punycode` is punycode.js, for the A-label of non-NFC text.
+ */
+function curatedGroups(seedCurated, punycode) {
+  const a = (count) => "a".repeat(count);
+  const total253 = [a(63), a(63), a(63), a(61)].join(".");
+  const total254 = [a(63), a(63), a(63), a(62)].join(".");
+  const ascii = Array.from({ length: 0x80 }, (_, cp) => String.fromCharCode(cp));
+  const cjk = String.fromCodePoint(...Array.from({ length: 1000 }, (_, i) => 0x4e00 + i));
+  return [
+    ["the GeoSpoof fixture's curated inputs", seedCurated],
+    // plan.md §6, with its exact strings.
+    ["J1: decoded values re-pair", ["xn--8c9bk9h.com", "xn--8c9b.com", "xn--8c9bj9h.com", "xn--a-8f4gp1m.com"]],
+    ["J2: a decoded value above 10FFFF", ["xn--en32g.com"]],
+    ["J3: a lone surrogate in toUnicode's output", ["xn--8c9b.com"]],
+    ["J5: CheckHyphens counts code points", ["\u{1F600}b--c", "ab\u{1F600}--c"]],
+    ["T1: the error is sticky", ["xn--zz.xn--mnchen-3ya.de"]],
+    ["T2: an xn-- label holding non-ASCII", ["xn--m\u00FCnchen.de", "xn--mnchen-3ya.xn--\u00FC.de"]],
+    ["T3, T4: a label that doesn't decode, or decodes to nothing or ASCII", ["xn--zz.com", "xn--.com", "xn--a.com", "xn--a-.com"]],
+    ["T5, T6: transitional processing, ẞ, and decoded labels", ["\u1E9E.de", "xn--zca.de", "fa\u00DF.de", "xn--fa-hia.de", "xn--zca.\u00DF.de"]],
+    ["T7: ContextJ's earlier ZWNJ", ["\u0628\u094D\u200C\u0628\u200Ca", "\u0628\u200Ca"]],
+    ["T8: encode overflow", [`${a(10950)}\u{30000}`, `${a(10900)}\u{30000}`]],
+    ["T9: verifyDNSLength", [a(63), a(64), total253, total254, `${total253}.`, "", "example.com."]],
+    // The rest of plan.md §11.2.
+    ["decode overflow", ["xn--99999999999a", "xn--zzzzzzzzzzzz", `xn--${"9".repeat(2000)}`]],
+    ["DNS length edges", [a(63), a(64), total253, total254, `${total253}.`, `${total254}.`, ".", "..", "a..b"]],
+    ["STD3: every ASCII character, alone and inside a?b", [...ascii, ...ascii.map((ch) => `a${ch}b`), "_dmarc.example.com"]],
+    ["CheckHyphens", ["ab--c", "-a", "a-", "xn--", "xn--a-", "XN--abc", "Xn--MNCHEN-3YA"]],
+    [
+      "transitional: deviations, and ZWJ/ZWNJ in Indic and Arabic contexts",
+      [
+        "fa\u00DF.de",
+        "\u1E9E.de",
+        "\u03C2.gr",
+        "\u0915\u094D\u200D\u0937",
+        "\u0915\u094D\u200C\u0937",
+        "\u0915\u200D\u0937",
+        "\u0628\u0647\u200C\u0647",
+        "\u0628\u200D\u0647",
+        "\u0644\u064E\u200C\u0627",
+      ],
+    ],
+    [
+      "bidi",
+      [
+        "\u05D01\u0661.com",
+        "\u06271\u0662",
+        "\u05D0\u0661\u05D1",
+        "\u05D01.com",
+        "\u0627\u0661.com",
+        "1\u05D0.com",
+        "\u0661\u05D0.com",
+        "a\u0301.\u05D0",
+        "ab\u0300.\u05D0\u05D1",
+        "xn--\u05D0.com",
+      ],
+    ],
+    [
+      "NFC",
+      [
+        "a\u0301",
+        "\u0316\u0301",
+        "\u0301\u0316",
+        "a\u0316\u0301",
+        "a\u0301\u0316",
+        "\u1100\u1161\u11A8",
+        "\uAC01",
+        "\u212B",
+        "\u0958",
+        `xn--${punycode.encode("a\u0301")}`,
+        `xn--${punycode.encode("\u0915\u093C")}`,
+      ],
+    ],
+    [
+      "emoji ZWJ sequences and full stops",
+      [
+        "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}.com",
+        "\u{1F3F3}\uFE0F\u200D\u{1F308}.com",
+        "\u{1F469}\u200D\u{1F4BB}",
+        "a\u3002b",
+        "a\uFF0Eb",
+        "a\uFF61b",
+        "example\u3002com\uFF0E",
+      ],
+    ],
+    ["long but valid", [cjk, `${cjk}.jp`, Array(500).fill("a").join(".")]],
+  ];
+}
+
+/**
+ * Unicode's 66 noncharacters are listed in DerivedAge but are gc=Cn in every version, so they
+ * are not "assigned" in the sense D8 means, and both NFCs treat them as they treat any Cn.
+ */
+const NONCHARACTER = /^\p{Noncharacter_Code_Point}$/u;
+const UNASSIGNED_IN_NODE = /^\p{Cn}$/u;
+
+/**
+ * Code points assigned in Unicode 18.0.0 (DerivedAge, less the noncharacters) that are \p{Cn}
+ * under this Node, whose ICU has only Unicode 16.0. Node's normalize("NFC") could treat them
+ * differently from the bundled Unicode 18.0.0 NFC, so an input that meets one is left out (D8).
+ * Code points unassigned in both are kept: both versions treat them identically.
+ */
+function newerThanNodeLookup(ageRanges) {
+  const newer = new Set();
+  for (const [lo, hi] of ageRanges) {
+    for (let cp = lo; cp <= hi; cp++) {
+      const text = String.fromCodePoint(cp);
+      if (UNASSIGNED_IN_NODE.test(text) && !NONCHARACTER.test(text)) newer.add(cp);
+    }
+  }
+  if (newer.size === 0) fail("no code point is newer than Node; is this Node's Unicode still 16.0?");
+  return { size: newer.size, has: (cp) => newer.has(cp) };
+}
+
+/**
+ * Every input of plan.md §11.1, in order and deduplicated, with real tr46's answers under all 128
+ * toASCII and 64 toUnicode option combinations (D8). Each answer is grouped with the combinations
+ * that give it, as a hex bitmask; the masks of one input partition the combinations.
+ */
+async function differentialVectors(sources, oracle, ageOf, ageRanges, seedFixture) {
+  const { tr46, punycode, mapChars: map } = oracle;
+  if (typeof String.prototype.toWellFormed !== "function") fail("this Node has no String.prototype.toWellFormed");
+  const newer = newerThanNodeLookup(ageRanges);
+  const toASCIICombinations = combinations(OPTION_ORDER.toASCII);
+  const toUnicodeCombinations = combinations(OPTION_ORDER.toUnicode);
+  const allASCII = (1n << BigInt(toASCIICombinations.length)) - 1n;
+  const allUnicode = (1n << BigInt(toUnicodeCombinations.length)) - 1n;
+
+  /** Groups per-combination answers by `key`, in order of each answer's first combination. */
+  const group = (answers, key) => {
+    const groups = new Map();
+    answers.forEach((answer, k) => {
+      const id = key(answer);
+      if (!groups.has(id)) groups.set(id, { answer, mask: 0n });
+      groups.get(id).mask |= 1n << BigInt(k);
+    });
+    return [...groups.values()];
+  };
+  const checkPartition = (groups, all, where) => {
+    let union = 0n;
+    for (const { mask } of groups) {
+      if ((union & mask) !== 0n) fail(`${where}: two answers claim the same combination`);
+      union |= mask;
+    }
+    if (union !== all) fail(`${where}: the answers don't cover every combination`);
+  };
+
+  /** The vector for `input`, or null when D8 leaves it out. */
+  const vectorFor = (input, where) => {
+    if (LONE_SURROGATE.test(input)) fail(`${where} ${show(input)}: a lone surrogate in an input`);
+    const ascii = toASCIICombinations.map((options) => tr46.toASCII(input, options));
+    const unicode = toUnicodeCombinations.map((options) => tr46.toUnicode(input, options));
+    // The input, both mapped intermediates and every answer: whatever tr46 normalizes, or checks
+    // is normalized, is one of these or is built from them.
+    const texts = new Set([input, map(input, false), map(input, true)]);
+    for (const value of ascii) if (value !== null) texts.add(value);
+    for (const { domain } of unicode) texts.add(domain);
+    const codePoints = [...texts].flatMap(codePointsOf);
+    if (codePoints.some((cp) => newer.has(cp))) return null;
+
+    const asciiGroups = group(ascii, (value) => (value === null ? "null" : `"${value}`));
+    checkPartition(asciiGroups, allASCII, `${where} toASCII`);
+    const toASCII = asciiGroups.map(({ answer, mask }) => [answer, hexMask(mask, toASCIICombinations.length)]);
+    for (const value of ascii) {
+      if (value !== null && LONE_SURROGATE.test(value)) fail(`${where} ${show(input)}: toASCII gives a lone surrogate`);
+    }
+    // J3: a Swift String can't hold a lone surrogate, so a domain with one is compared as
+    // toWellFormed() gives it, U+FFFD in its place, and marked. tr46 only ever gives one with an error.
+    const wellFormed = unicode.map(({ domain, error }) => {
+      const replaced = domain.toWellFormed();
+      if (replaced === domain) return [domain, error];
+      if (error !== true) fail(`${where} ${show(input)}: toUnicode gives a lone surrogate without an error`);
+      return [replaced, error, true];
+    });
+    const unicodeGroups = group(wellFormed, (answer) => JSON.stringify(answer));
+    checkPartition(unicodeGroups, allUnicode, `${where} toUnicode`);
+    const toUnicode = unicodeGroups.map(({ answer: [domain, error, replaced], mask }) => {
+      const row = [domain, error, hexMask(mask, toUnicodeCombinations.length)];
+      if (replaced) row.push(true);
+      return row;
+    });
+
+    const vector = { input, toASCII, toUnicode };
+    const age = ageAboveFloor(ageOf, codePoints);
+    if (age !== null) vector.age = age;
+    return vector;
+  };
+
+  const seen = new Set();
+  const vectors = [];
+  const counts = { inputs: 0, idnaTestV2: 0, wpt: 0, curated: 0, fuzz: 0, excludedNewerThanNode: 0, toASCIIResults: 0, toUnicodeResults: 0 };
+  const excluded = { idnaTestV2: 0, wpt: 0, curated: 0, fuzz: 0 };
+  const duplicates = { idnaTestV2: 0, wpt: 0, curated: 0, fuzz: 0 };
+  /** Adds `input` from `kind` unless it is a duplicate or D8 leaves it out; returns whether it did. */
+  const add = (kind, input, where) => {
+    if (seen.has(input)) {
+      duplicates[kind]++;
+      return false;
+    }
+    seen.add(input);
+    const vector = vectorFor(input, where);
+    if (vector === null) {
+      excluded[kind]++;
+      counts.excludedNewerThanNode++;
+      return false;
+    }
+    vectors.push(vector);
+    counts[kind]++;
+    return true;
+  };
+
+  // 1. Every IdnaTestV2 source except the two with a lone surrogate (J4).
+  const idna = await sources.unicode("IdnaTestV2");
+  let idnaLone = 0;
+  for (const row of parseIdnaTestV2(idna.text)) {
+    if (LONE_SURROGATE.test(row.source)) {
+      idnaLone++;
+      continue;
+    }
+    add("idnaTestV2", row.source, `IdnaTestV2.txt:${row.line}`);
+  }
+  if (idnaLone !== 2) fail(`IdnaTestV2.txt has ${idnaLone} lone-surrogate sources, expected 2`);
+
+  // 2. Every WPT input, the ones tr46's harness skips included, except the two with a lone surrogate.
+  let wptLone = 0;
+  for (const key of ["toascii", "idnaTestV2"]) {
+    const file = await sources.wpt(key);
+    for (const [index, entry] of JSON.parse(file.text).entries()) {
+      if (typeof entry === "string") continue; // a comment
+      if (LONE_SURROGATE.test(entry.input)) {
+        wptLone++;
+        continue;
+      }
+      add("wpt", entry.input, `${file.path}[${index}]`);
+    }
+  }
+  if (wptLone !== 2) fail(`the WPT files have ${wptLone} lone-surrogate inputs, expected 2`);
+
+  // 3. The curated inputs.
+  const seedCurated = seedFixture.curated.map((vector) => vector.input);
+  if (seedCurated.length !== SEED_FIXTURE.counts.curated) fail(`the GeoSpoof fixture has ${seedCurated.length} curated inputs`);
+  for (const [note, inputs] of curatedGroups(seedCurated, punycode)) {
+    for (const input of inputs) {
+      const length = codePointsOf(input).length;
+      if (length > CURATED_MAX_CODE_POINTS && !note.startsWith("T8")) fail(`curated "${note}": an input of ${length} code points`);
+      add("curated", input, `curated "${note}"`);
+    }
+  }
+
+  // 4. Exactly FUZZ_COUNT fuzz inputs. A draw that repeats an earlier input, or that D8 leaves
+  // out, is replaced by the next one.
+  const pkg = oracle.pkg;
+  const unicodeData = parseUnicodeData((await sources.unicode("UnicodeData")).text);
+  const pools = createPools({ rows: oracle.rows, status: oracle.status, classes: readClasses(pkg), unicodeData, newerThanNode: newer.has });
+  const nextFuzz = createFuzzer({ random: createRandom(FUZZ_SEED), pools, punycode });
+  let drawn = 0;
+  while (counts.fuzz < FUZZ_COUNT) {
+    if (++drawn > FUZZ_COUNT * 2) fail(`only ${counts.fuzz} of ${FUZZ_COUNT} fuzz inputs after ${drawn} draws`);
+    add("fuzz", nextFuzz(), `fuzz draw ${drawn}`);
+  }
+
+  counts.inputs = vectors.length;
+  counts.toASCIIResults = vectors.length * toASCIICombinations.length;
+  counts.toUnicodeResults = vectors.length * toUnicodeCombinations.length;
+  if (counts.idnaTestV2 + counts.wpt + counts.curated + counts.fuzz !== counts.inputs) fail("the per-source counts don't add up");
+  const withAge = vectors.filter((vector) => vector.age !== undefined).length;
+  const replaced = vectors.filter((vector) => vector.toUnicode.some((row) => row.length === 4)).length;
+
+  const header = {
+    about:
+      `Real tr46 ${TR46.version}'s answers under Node ${NODE.version}, for every combination of its options: all 128 for ` +
+      "toASCII and all 64 for toUnicode, which has no verifyDNSLength. Combination k has option optionOrder[j] on when bit j " +
+      "of k is set. The inputs are every IdnaTestV2.txt source, every WPT toascii.json and IdnaTestV2.json input (the ones " +
+      "tr46's harness skips included), the curated inputs of Scripts/generate-vectors.mjs and seeded fuzz inputs from " +
+      "Scripts/lib/fuzz.mjs, deduplicated, less the ones holding a lone surrogate, which a Swift String can't hold. An input " +
+      "is left out (excludedNewerThanNode) when it, either of its mapped forms or any answer holds a code point assigned in " +
+      `Unicode ${UNICODE.version} that this Node's Unicode ${NODE.unicode} leaves unassigned, because there Node's NFC may ` +
+      "legitimately differ. Each vector is {input, toASCII: [[answer or null, mask], ...], toUnicode: [[domain, error, mask, " +
+      "replacedLoneSurrogates?], ...], age?}. A mask is hex, bit k for combination k, and the masks of one vector partition " +
+      "the combinations. A toUnicode domain is given as toWellFormed() gives it, with replacedLoneSurrogates true where that " +
+      `replaced a lone surrogate by U+FFFD. age is the highest DerivedAge among the assigned code points of the input, its ` +
+      `mapped forms and the answers, present only above ${AGE_FLOOR}; the .foundation comparison skips those vectors.`,
+    license:
+      "The curated and fuzz inputs are this package's, under its MIT License (LICENSE). The IdnaTestV2 inputs are derived " +
+      `from Unicode's IdnaTestV2.txt ${UNICODE.version}, Copyright \u00a9 1991-2026 Unicode, Inc., under the Unicode ` +
+      "License V3 (https://www.unicode.org/license.txt). The WPT inputs are derived from web-platform-tests, Copyright " +
+      "\u00a9 web-platform-tests contributors, under the 3-Clause BSD License; the full text is in " +
+      "LICENSE-web-platform-tests.md next to this file. See NOTICE.",
+    source: {
+      unicode: { version: UNICODE.version, files: { [idna.path]: { url: idna.url, sha256: idna.sha256 } } },
+      wpt: { commit: WPT.commit, files: Object.fromEntries(["toascii", "idnaTestV2"].map((key) => [WPT.files[key].path, WPT.files[key].sha256])) },
+    },
+    generator: GENERATOR,
+    tr46: { version: TR46.version, integrity: TR46.integrity },
+    punycode: { version: PUNYCODE.version, integrity: PUNYCODE.integrity },
+    node: { version: process.version, unicode: process.versions.unicode, icu: process.versions.icu },
+    fuzzSeed: `0x${FUZZ_SEED.toString(16)}`,
+    optionOrder: OPTION_ORDER,
+    counts,
+  };
+  console.log(
+    `[${TAG}] differential: ${drawn} fuzz draws; duplicates ${JSON.stringify(duplicates)}; excluded newer than Node ` +
+      `${JSON.stringify(excluded)} (${newer.size} code points are newer than Node); ${withAge} with an age above ` +
+      `${AGE_FLOOR}; ${replaced} with a replaced lone surrogate`
+  );
+  return {
+    file: `${RESOURCES}/differential.json`,
+    output: vectorFile(header, { vectors }),
+    summary:
+      `${counts.inputs} inputs (IdnaTestV2 ${counts.idnaTestV2}, WPT ${counts.wpt}, curated ${counts.curated}, fuzz ${counts.fuzz}; ` +
+      `${counts.excludedNewerThanNode} excluded newer than Node), ${counts.toASCIIResults} toASCII and ${counts.toUnicodeResults} toUnicode results`,
+  };
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
@@ -405,14 +749,16 @@ await run(TAG, async () => {
     return;
   }
   const age = await sources.unicode("DerivedAge");
-  const ageOf = ageLookup(parseDerivedAge(age.text));
+  const ageRanges = parseDerivedAge(age.text);
+  const ageOf = ageLookup(ageRanges);
   const tr46 = loadTr46(sources);
   // Every section is computed, and so every assertion run, before any file is written.
+  const seedFixture = checkSeedFixture(tr46);
   const outputs = [
     await normalizationVectors(sources),
     await idnaTestV2Vectors(sources, tr46, ageOf),
     await wptVectors(sources, tr46),
+    await differentialVectors(sources, tr46, ageOf, ageRanges, seedFixture),
   ];
-  checkSeedFixture(tr46);
   for (const { file, output, summary } of outputs) writeOutput(TAG, file, output, summary);
 });
