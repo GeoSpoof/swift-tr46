@@ -32,13 +32,15 @@ jobs:
           persist-credentials: false
       # The newest released Xcode on the image, read from each app's Info.plist rather than its
       # name. Symlinks such as Xcode.app and Xcode_26.6.0.app are skipped, and so are betas.
+      # The case pattern keeps its leading "(": the runner's bash 3.2 otherwise reads the ")" as
+      # closing the $( ) and fails with a syntax error.
       - name: Select the newest Xcode
         run: |
           set -euo pipefail
           xcode=$(
             for app in /Applications/Xcode*.app; do
               [ -L "$app" ] && continue
-              case "$app" in *beta* | *Beta*) continue ;; esac
+              case "$app" in (*beta* | *Beta*) continue ;; esac
               printf '%s %s\n' "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" "$app"
             done | sort -V | tail -1 | cut -d' ' -f2-
           )
