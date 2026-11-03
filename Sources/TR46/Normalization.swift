@@ -12,18 +12,11 @@ internal import Foundation
 #endif
 
 /// The NFC that both of tr46's NFC steps go through: processing's step 2, which normalizes the
-/// whole mapped domain, and validateLabel's step 1, which checks a label is already in NFC.
+/// whole mapped domain, and validateLabel's step 1, which checks a label is already in NFC. Both
+/// use the same mode, so a domain is never normalized with one set of data and checked with another.
 struct Normalizer: Sendable {
-    enum Mode: Sendable, Hashable {
-        /// `NFC`, over the bundled Unicode 18.0.0 tables.
-        case bundled
-        #if canImport(Darwin)
-        /// `FoundationNFC`, over the OS's data.
-        case foundation
-        #endif
-    }
-
-    let mode: Mode
+    /// `.bundled` is `NFC`; `.foundation` is `FoundationNFC`.
+    let mode: TR46.Normalization
 
     func nfc(_ codePoints: [UInt32]) -> [UInt32] {
         switch mode {
