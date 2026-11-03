@@ -7,6 +7,15 @@ Punycode implementation in punycode.js
 (https://github.com/mathiasbynens/punycode.js). Both are MIT licensed. LICENSE
 covers the port and carries the copyright notices of both projects.
 
+tr46 data and answers
+
+Sources/TR46/Generated/IDNATables.swift re-encodes tr46 7.0.0's
+lib/mappingTable.json, lib/regexes.js and lib/statusMapping.js, Copyright (c)
+Sebastian Mayr, under the MIT License in LICENSE. The expected answers in
+Tests/TR46Tests/Resources were produced by, or checked against, tr46 7.0.0
+and punycode.js 2.3.1. The curated and fuzzed inputs of differential.json
+were written for this package and are covered by LICENSE.
+
 Unicode data
 
 This package contains data derived from Unicode data files:
