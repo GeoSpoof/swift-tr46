@@ -19,7 +19,7 @@ struct Normalizer: Sendable {
     let mode: TR46.Normalization
 
     func nfc(_ codePoints: [UInt32]) -> [UInt32] {
-        switch mode {
+        switch mode.implementation {
         case .bundled:
             return NFC.normalize(codePoints)
         #if canImport(Darwin)
@@ -30,7 +30,7 @@ struct Normalizer: Sendable {
     }
 
     func isNFC(_ codePoints: [UInt32]) -> Bool {
-        switch mode {
+        switch mode.implementation {
         case .bundled:
             return NFC.isNormalized(codePoints)
         #if canImport(Darwin)
@@ -302,6 +302,10 @@ enum NFC {
 
 #if canImport(Darwin)
 /// Foundation's NFC, `precomposedStringWithCanonicalMapping`, which uses the OS's Unicode data.
+///
+/// Its time is quadratic in the length of a run of combining marks, and the Normalizer calls it
+/// twice per input (the whole domain, then each non-ASCII label). This package can't change that
+/// without changing what `.foundation` means; `TR46.Normalization.foundation` documents it.
 enum FoundationNFC {
     static func normalize(_ codePoints: [UInt32]) -> [UInt32] {
         assert(

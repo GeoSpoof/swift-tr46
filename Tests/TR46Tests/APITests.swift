@@ -73,6 +73,7 @@ struct APITests {
         // All 128 combinations are distinct values.
         #expect(Set(OptionCombinations.all).count == 128)
         #if canImport(Darwin)
+        #expect(TR46.Normalization.foundation != .bundled)
         let foundation = TR46.Options(normalization: .foundation)
         #expect(foundation != TR46.Options())
         #expect(Set(OptionCombinations.all + [foundation]).count == 129)
