@@ -420,8 +420,11 @@ const combinations = (order) =>
 /** A combination bitmask as fixed-width lower-case hex, bit k set for combination k. */
 const hexMask = (mask, combinationCount) => mask.toString(16).padStart(combinationCount / 4, "0");
 
-/** The longest curated input apart from T8's: 2,000 code points, plus the "xn--" of the decode-overflow case. */
+/** The longest curated input apart from the uncapped groups: 2,000 code points, plus the "xn--" of the decode-overflow case. */
 const CURATED_MAX_CODE_POINTS = 2004;
+
+/** The curated groups whose inputs have to be longer than CURATED_MAX_CODE_POINTS. */
+const UNCAPPED_CURATED_GROUPS = new Set(["T8: encode overflow", "Punycode above 1,024 code points: labels that decode"]);
 
 /**
  * The curated inputs, grouped by what they exercise. The groups overlap on
@@ -434,6 +437,13 @@ function curatedGroups(seedCurated, punycode) {
   const total254 = [a(63), a(63), a(63), a(62)].join(".");
   const ascii = Array.from({ length: 0x80 }, (_, cp) => String.fromCharCode(cp));
   const cjk = String.fromCodePoint(...Array.from({ length: 1000 }, (_, i) => 0x4e00 + i));
+  // Labels that decode to more than Punycode.literalLimit (1,024) code points, so the Swift port
+  // decodes and re-encodes them on its O(n log n) path. The second interleaves basic code points
+  // and repeats CJK code points out of order, so insertions land all over the label.
+  const cjk1200 = String.fromCodePoint(...Array.from({ length: 1200 }, (_, i) => 0x4e00 + i));
+  const mixed1300 = String.fromCodePoint(
+    ...Array.from({ length: 1300 }, (_, i) => (i % 10 === 0 ? 0x61 + ((i / 10) % 26) : 0x4e00 + ((i * 7919) % 600)))
+  );
   return [
     ["the GeoSpoof fixture's curated inputs", seedCurated],
     // The J and T items of Sources/TR46/Documentation.docc/BehaviourFromJavaScript.md, with its
@@ -512,6 +522,7 @@ function curatedGroups(seedCurated, punycode) {
       ],
     ],
     ["long but valid", [cjk, `${cjk}.jp`, Array(500).fill("a").join(".")]],
+    ["Punycode above 1,024 code points: labels that decode", [`xn--${punycode.encode(cjk1200)}`, `xn--${punycode.encode(mixed1300)}.jp`]],
   ];
 }
 
@@ -674,7 +685,7 @@ async function differentialVectors(sources, oracle, ageOf, ageRanges, seedFixtur
   for (const [note, inputs] of curatedGroups(seedCurated, punycode)) {
     for (const input of inputs) {
       const length = codePointsOf(input).length;
-      if (length > CURATED_MAX_CODE_POINTS && !note.startsWith("T8")) fail(`curated "${note}": an input of ${length} code points`);
+      if (length > CURATED_MAX_CODE_POINTS && !UNCAPPED_CURATED_GROUPS.has(note)) fail(`curated "${note}": an input of ${length} code points`);
       add("curated", input, `curated "${note}"`);
     }
   }
